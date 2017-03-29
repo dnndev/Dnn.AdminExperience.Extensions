@@ -10,7 +10,7 @@ using System;
 
 namespace Dnn.PersonaBar.Prompt.Commands.Host
 {
-    [ConsoleCommand("clear-log", "Clears the Event Logo for the current portal", new string[] {})]
+    [ConsoleCommand("clear-log", "Clears the Event Log for the current portal", new string[] {})]
     public class ClearLog : ConsoleCommandBase, IConsoleCommand
 {
 
