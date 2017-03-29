@@ -28,9 +28,78 @@ namespace Dnn.PersonaBar.Prompt.Services
             return Request.CreateResponse(HttpStatusCode.OK, CommandRepository.Instance.GetCommands().Values);
         }
 
-        [ValidateAntiForgeryToken]
+        [DnnAuthorize(AuthTypes = "JWT", StaticRoles = "Administrators")]
+        [HttpGet]
+        public HttpResponseMessage MobileList()
+        {
+            return Request.CreateResponse(HttpStatusCode.OK, CommandRepository.Instance.GetCommands().Values);
+        }
+
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public HttpResponseMessage Cmd([FromBody] CommandInputModel command)
+        {
+
+            try
+            {
+                var args = command.GetArgs();
+                var cmdName = args.First().ToUpper();
+                var Commands = CommandRepository.Instance.GetCommands();
+                if (!Commands.ContainsKey(cmdName) && cmdName.IndexOf('.') == -1)
+                {
+                    var seek = Commands.Values.FirstOrDefault(c => c.Name.ToUpper() == cmdName);
+                    // if there is a command which matches then we assume the user meant that namespace
+                    if (seek != null)
+                    {
+                        cmdName = string.Format("{0}.{1}", seek.NameSpace.ToUpper(), cmdName);
+                    }
+                }
+
+                // if no command found notify
+                if (!Commands.ContainsKey(cmdName))
+                {
+                    StringBuilder sbError = new StringBuilder();
+                    string suggestion = GetSuggestedCommand(cmdName);
+                    sbError.AppendFormat("Command '{0}' not found.", cmdName.ToLower());
+                    if (!string.IsNullOrEmpty(suggestion))
+                    {
+                        sbError.AppendFormat(" Did you mean '{0}'?", suggestion);
+                    }
+
+                    return BadRequestResponse(sbError.ToString());
+                }
+                Type cmdTypeToRun = Commands[cmdName].CommandType;
+
+                // Instantiate and run the command
+                try
+                {
+                    var cmdObj = (IConsoleCommand)Activator.CreateInstance(cmdTypeToRun);
+                    // set env. data for command use
+                    cmdObj.Init(args, PortalSettings, UserInfo, command.currentPage);
+                    if (cmdObj.IsValid())
+                    {
+                        return Request.CreateResponse(HttpStatusCode.OK, cmdObj.Run());
+                    }
+                    else
+                    {
+                        return BadRequestResponse(cmdObj.ValidationMessage);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DotNetNuke.Services.Exceptions.Exceptions.LogException(ex);
+                    return BadRequestResponse();
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequestResponse();
+            }
+        }
+
+        [DnnAuthorize(AuthTypes = "JWT", StaticRoles = "Administrators")]
+        [HttpPost]
+        public HttpResponseMessage MobileCmd([FromBody] CommandInputModel command)
         {
 
             try
